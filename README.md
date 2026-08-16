@@ -1,5 +1,10 @@
 # Forward Ho!
 
+[![CI](https://github.com/cportka/forward-ho/actions/workflows/ci.yml/badge.svg)](https://github.com/cportka/forward-ho/actions/workflows/ci.yml)
+[![Deploy](https://github.com/cportka/forward-ho/actions/workflows/deploy.yml/badge.svg)](https://github.com/cportka/forward-ho/actions/workflows/deploy.yml)
+
+**▶ [Play it here](https://cportka.github.io/forward-ho/)**
+
 A forward-scrolling crowd-runner shoot-'em-up. You command a marching column of
 troops down a road that never stops. The column fires by itself; your only job
 is to steer it — through the gates that grow it, into the reward boards that
@@ -109,6 +114,14 @@ src/
   dev/        sprite gallery
 tools/        Playwright screenshot + smoke-test harness
 ```
+
+## CI & deployment
+
+- **`ci.yml`** — typechecks, builds, and then plays a real run in headless
+  Chromium via the screenshot harness, failing on any console or page error.
+  Screenshots are uploaded as an artifact on every run.
+- **`deploy.yml`** — builds and publishes `dist/` to GitHub Pages on every push
+  to `main`.
 
 ## Developer tools
 
