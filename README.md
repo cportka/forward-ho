@@ -23,7 +23,10 @@ npm install
 npm run dev      # http://127.0.0.1:5173
 ```
 
-- **Steer** — drag anywhere, or `A`/`D`, or the arrow keys.
+- **Steer** — drag sideways, or `A`/`D`, or the left/right arrows.
+- **Charge / hold** — drag up to push the column forward, down to hold it back
+  (`W`/`S` or the up/down arrows). Charging buys up to +50% rate of fire and
+  costs you safety; holding back trades ~30% cadence for room to work.
 - **Pause** — `Esc` / `P`, or the button bottom-right.
 - Your troops fire on their own. Positioning *is* the game.
 
@@ -40,7 +43,7 @@ anywhere; `npm run preview` serves it locally.
 | **Barricades** | Grids of crates, planks, barrels and sandbags. Blast the cells out or lose troops ploughing through them. |
 | **The horde** | A carpet of bodies stretching up the road. It feeds real marchers off its near edge and visibly recedes as you grind through it. Every body that reaches your formation costs you a troop. |
 | **Bosses** | They hold station ahead of you and close in on a clock, cycling stomps, charges and summons. Out-damage the countdown or get walked over. |
-| **Gold & the barracks** | Coins bank between runs and buy permanent upgrades: starting troops, fire rate, damage, pickup range, a mid-run rally, and march speed. |
+| **Gold & the barracks** | Coins bank between runs and buy permanent upgrades: starting troops, fire rate, damage, pickup range, a mid-run rally, and march speed. The barracks opens automatically at the end of every level, with the next sector one button away. |
 
 Six sectors — Iron Strait, Slag Works, Frost Reach, Brass Dunes, Neon Mile and
 The Last Mile — each with its own sky, terrain, props and boss. Past the last
@@ -89,6 +92,18 @@ than a near one — without anything snapping to a single global grid.
   formation compresses instead of spilling off the road. Total damage scales
   with the crowd while the number of visible shooters stays bounded, so a
   400-strong army melts things without drawing 400 muzzle flashes.
+- **Everything the troops do leaves a mark.** The column marches on one shared
+  cadence — a four-frame cycle, a synchronised bob, and a footfall beat that
+  kicks dust off the road and thumps a footstep cue. Volleys shove the
+  shoulders back, throw a muzzle flash, and eject brass that arcs right and
+  tinks off the tarmac. Brushing a gate sparks at the exact point of contact,
+  picked-up gold sparkles over the ranks, and losing troops puffs where they
+  fell.
+- **Forward and back** — the column rides an auto-advancing rail plus a
+  player-controlled offset. The camera only takes part of that offset, and
+  asymmetrically, so charging visibly walks the squad up the screen while
+  holding back barely enlarges it. Rate of fire and the contact band both scale
+  off the same number.
 - **The horde** — a field's *mass* and its *simulated marchers* are separate
   numbers. A 170-body carpet spawns ~44 real enemies and loses ~4 bodies of
   carpet per kill, which is what lets an army stretch to the horizon without
@@ -96,9 +111,16 @@ than a near one — without anything snapping to a single global grid.
 - **Destructible HP is sized against your current DPS**, not a flat constant,
   so a board always takes about the same number of seconds to break whether
   you're nine troops with a musket or four hundred with an ion lance.
-- **Audio** is fully synthesised — oscillators, one shared noise buffer,
-  filters and envelopes, plus a look-ahead chiptune sequencer with four tracks
-  and crossfades. No asset files anywhere in the project.
+- **Audio** ships no files either. The music is a look-ahead chiptune sequencer
+  with four tracks and crossfades, synthesised from oscillators, one shared
+  noise buffer, filters and envelopes. The effects come from
+  [`8bit-sfx`](https://github.com/cportka/8bit-sfx), which synthesises its
+  catalogue from effect names — the package is loaded with a dynamic import off
+  the first user gesture, each of the 33 effects is rendered once into an
+  `AudioBuffer` and peak-normalised to a per-event target, and they then play
+  through the game's own voice pool so mute, panning, the voice cap and the
+  per-effect repeat guard all still apply. Anything not yet baked falls back to
+  the built-in synthesis, so the game is never silent while the bank fills.
 - **Levels are deterministic** — `buildLevel(index, seed)` emits a flat,
   depth-sorted list of things to place, which the world streams in as you
   approach. Same seed, same run.
@@ -109,7 +131,8 @@ than a near one — without anything snapping to a single global grid.
 src/
   core/       math, seeded RNG, input, localStorage
   render/     sprite baking, layered pixel buffers, camera, font, art bank, backdrops
-  game/       squad, bullets, enemies, boss, props, fx, levels, world, progression, audio
+  game/       squad, bullets, enemies, boss, props, fx, levels, world, progression,
+              audio (music + engine), sfxbank (8bit-sfx catalogue mapping)
   ui/         immediate-mode widgets, HUD, screens
   dev/        sprite gallery
 tools/        Playwright screenshot + smoke-test harness
@@ -145,4 +168,7 @@ The debug hook (`window.__FH`) exposes `startRun`, `setSteer`, `seed`,
 
 Built as a homage to the mobile "army runner" genre — the marching crowd, the
 multiplier gates, the shoot-the-number reward boards and the boss that walks at
-you. All art, sound and code here are original.
+you.
+
+Sound effects are synthesised by [`8bit-sfx`](https://github.com/cportka/8bit-sfx)
+(MIT). All art, music and game code here are original.

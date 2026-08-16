@@ -48,8 +48,15 @@ export class Input {
   steer = 0;
   /** Raw target steering before smoothing. */
   steerTarget = 0;
+  /**
+   * Smoothed forward/back push in [-1, 1]. +1 drives the column up the road
+   * (faster fire, more exposure), -1 holds it back (slower fire, safer).
+   */
+  push = 0;
+  pushTarget = 0;
   /** Set by the debug hook to override human input. */
   scriptedSteer: number | null = null;
+  scriptedPush: number | null = null;
 
   private keys = new Set<string>();
   private justPressed = new Set<string>();
@@ -61,6 +68,8 @@ export class Input {
 
   /** Drag sensitivity: fraction of canvas width for a full-lane sweep. */
   dragSpan = 0.34;
+  /** Vertical drag distance, as a fraction of canvas height, for a full push. */
+  pushSpan = 0.16;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     const c = canvas;
@@ -170,11 +179,36 @@ export class Input {
     return true;
   }
 
-  update(dt: number, cssWidth: number): void {
+  update(dt: number, cssWidth: number, cssHeight = 800): void {
     const p = this.pointer;
     p.dx = this.pendingDx;
     this.pendingDx = 0;
 
+    // --- forward / back push
+    if (this.scriptedPush !== null) {
+      this.pushTarget = clamp(this.scriptedPush, -1, 1);
+    } else {
+      let pt = 0;
+      let pushKeys = false;
+      if (this.held('w', 'ArrowUp')) {
+        pt += 1;
+        pushKeys = true;
+      }
+      if (this.held('s', 'ArrowDown')) {
+        pt -= 1;
+        pushKeys = true;
+      }
+      if (!pushKeys && p.down) {
+        // Relative to where the drag started, so the thumb's resting height
+        // is always neutral. Dragging up pushes the column forward.
+        const span = Math.max(48, cssHeight * this.pushSpan);
+        pt = clamp(-(p.y - p.startY) / span, -1, 1);
+      }
+      this.pushTarget = pt;
+    }
+    this.push = damp(this.push, this.pushTarget, 7.5, dt);
+
+    // --- lateral steering
     if (this.scriptedSteer !== null) {
       this.steerTarget = clamp(this.scriptedSteer, -1, 1);
       this.steer = damp(this.steer, this.steerTarget, 14, dt);

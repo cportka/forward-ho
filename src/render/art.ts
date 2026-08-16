@@ -13,118 +13,131 @@ import { defineSprite, recolor, type SpriteDef } from './sprite';
 // Friendly infantry — seen from behind
 // ---------------------------------------------------------------------------
 
+/**
+ * Friendly infantry, seen from behind.
+ *
+ * Field-green army palette with hard black outlines: dark helmet with a pale
+ * unit flash on the crown, tan neck, layered greens on the pack and fatigues,
+ * brown gloves and boots, and a grey rifle carried out to the right so the
+ * muzzle clears the rank in front.
+ */
 const SOLDIER_KEY = {
-  k: '#0b0d14',
-  h: '#2b3d74',
-  H: '#5c7fd0',
-  s: '#f0c49b',
-  d: '#22499f',
-  c: '#3f83ef',
-  C: '#8cc4ff',
-  b: '#3a2418',
-  p: '#33436a',
-  o: '#20242f',
-  g: '#4a505f',
-  G: '#a8b2c4',
+  k: '#05070a', // outline
+  h: '#1c4520', // helmet shadow / rim
+  H: '#2f7030', // helmet
+  m: '#dcefe2', // unit flash
+  M: '#a9c9b4', // unit flash shade
+  s: '#e8c48c', // skin
+  t: '#c9a066', // skin shadow
+  C: '#5e9c4a', // fatigues, lit
+  c: '#4a8038', // fatigues, mid
+  d: '#37642a', // fatigues, shadow
+  w: '#7cc063', // webbing highlight
+  b: '#3d2814', // belt
+  B: '#5c3d22', // boots / gloves
+  G: '#98a3b4', // rifle, lit
+  g: '#5b6472', // rifle, body
+  P: '#2f5626', // trousers — deliberately darker than the tunic so the legs
+  N: '#24421d', // read as legs and not as more torso
 };
 
-const SOLDIER_TORSO = [
-  '....hhh....',
-  '...hHHHh..g',
-  '...hhhhh..g',
-  '....sss...G',
-  '..dcCCCcd.g',
-  '.dcCCCCCcdg',
-  '.dcCCCCCcd.',
-  '.dcCCCCCcd.',
-  '..bbbbbbb..',
-  '..dcCCCcd..',
+/**
+ * Head, torso and rifle — identical across the march cycle.
+ *
+ * Palette slots, in order, are what the recolour maps below index into:
+ * 1 k outline, 2 h helmet shadow, 3 H helmet, 4 m flash, 5 M flash shade,
+ * 6 s skin, 7 t skin shadow, 8 C fatigues lit, 9 c fatigues mid,
+ * 10 d fatigues shadow, 11 w webbing, 12 b belt, 13 B leather, 14 G rifle lit,
+ * 15 g rifle body.
+ */
+const SOLDIER_TOP = [
+  '......kkk......',
+  '....kkHHHkk....',
+  '...khHHHHHhk...',
+  '...khHmmmHhk...',
+  '...khHHHHHhk...',
+  '....khhhhhk....',
+  '.....kstsk.....',
+  '...kkcCCCckk...',
+  '..kdcCCCCCcdk..',
+  '..kdcCwwwCcdk.G',
+  '.kBdcCwwwCcdBGG',
+  '.kBdcCCCCCcdBgG',
+  '..kdcCCCCCcdk..',
+  '..kkbbbbbbbkk..',
 ];
 
-export const SPR_SOLDIER_A = defineSprite(
-  'sol_a',
-  [...SOLDIER_TORSO, '...ppppp...', '...pp.pp...', '..pp...pp..', '..oo...oo..', '..oo...oo..', '..kk...kk..'],
-  SOLDIER_KEY,
-);
+/**
+ * Legs: a four-beat march. Narrow, wide-left, narrow, wide-right, so the whole
+ * column reads as one cadence rather than a field of independent animations.
+ */
+const SOLDIER_LEGS: string[][] = [
+  ['..kPPPPPPPk....', '...kPNk.kNPk...', '...kBBk.kBBk...', '...kkkk.kkkk...'],
+  ['..kPPPPPPPk....', '..kPNk...kNPk..', '..kBBk...kBBk..', '..kkkk...kkkk..'],
+  ['..kPPPPPPPk....', '...kPNk.kNPk...', '...kBBk.kBBk...', '...kkkk.kkkk...'],
+  ['..kPPPPPPPk....', '....kPNk.kNPk..', '....kBBk.kBBk..', '....kkkk.kkkk..'],
+];
 
-export const SPR_SOLDIER_B = defineSprite(
-  'sol_b',
-  [...SOLDIER_TORSO, '...ppppp...', '...ppppp...', '...pp.pp...', '...oo.oo...', '...oo.oo...', '...kk.kk...'],
-  SOLDIER_KEY,
-);
+function soldier(id: string, legs: number): SpriteDef {
+  return defineSprite(id, [...SOLDIER_TOP, ...SOLDIER_LEGS[legs]], SOLDIER_KEY);
+}
 
-/** Firing pose: rifle kicked up, shoulders squared. */
+export const SPR_SOLDIER_A = soldier('sol_a', 0);
+export const SPR_SOLDIER_B = soldier('sol_b', 1);
+export const SPR_SOLDIER_C = soldier('sol_c', 2);
+export const SPR_SOLDIER_D = soldier('sol_d', 3);
+
+/** Firing pose: rifle up and braced, shoulders squared into the recoil. */
 export const SPR_SOLDIER_FIRE = defineSprite(
   'sol_f',
   [
-    '....hhh...G',
-    '...hHHHh.Gg',
-    '...hhhhh.g.',
-    '....sss.g..',
-    '..dcCCCcd..',
-    '.dcCCCCCcd.',
-    '.dcCCCCCcd.',
-    '.dcCCCCCcd.',
-    '..bbbbbbb..',
-    '..dcCCCcd..',
-    '...ppppp...',
-    '...pp.pp...',
-    '..pp...pp..',
-    '..oo...oo..',
-    '..oo...oo..',
-    '..kk...kk..',
+    '......kkk......',
+    '....kkHHHkk....',
+    '...khHHHHHhk...',
+    '...khHmmmHhk..G',
+    '...khHHHHHhk.GG',
+    '....khhhhhk.GG.',
+    '.....kstsk.Bk..',
+    '...kkcCCCckg...',
+    '..kdcCCCCCcdk..',
+    '..kdcCwwwCcdk..',
+    '.kBdcCwwwCcdk..',
+    '.kBdcCCCCCcdk..',
+    '..kdcCCCCCcdk..',
+    '..kkbbbbbbbkk..',
+    '..kPPPPPPPk....',
+    '...kPNk.kNPk...',
+    '...kBBk.kBBk...',
+    '...kkkk.kkkk...',
   ],
   SOLDIER_KEY,
 );
 
-/** Redcoat/gold variant for the bridge campaign. */
-export const SPR_REDCOAT_A = recolor(SPR_SOLDIER_A, 'red_a', {
-  2: '#3a1020',
-  3: '#8b2246',
-  6: '#c22b3f',
-  7: '#f0574f',
-  9: '#2ec9c0',
-});
-export const SPR_REDCOAT_B = recolor(SPR_SOLDIER_B, 'red_b', {
-  2: '#3a1020',
-  3: '#8b2246',
-  6: '#c22b3f',
-  7: '#f0574f',
-  9: '#2ec9c0',
-});
-export const SPR_REDCOAT_FIRE = recolor(SPR_SOLDIER_FIRE, 'red_f', {
-  2: '#3a1020',
-  3: '#8b2246',
-  6: '#c22b3f',
-  7: '#f0574f',
-  9: '#2ec9c0',
-});
+/** Crimson-and-gold line infantry for the desert campaign. */
+const REDCOAT_MAP = {
+  2: '#4a1220', 3: '#8e2440',
+  8: '#e2564f', 9: '#c22b3f', 10: '#7c1226',
+  11: '#ffd447', 13: '#4a2a16',
+  16: '#7c1226', 17: '#5a0d1c',
+};
+export const SPR_REDCOAT_A = recolor(SPR_SOLDIER_A, 'red_a', REDCOAT_MAP);
+export const SPR_REDCOAT_B = recolor(SPR_SOLDIER_B, 'red_b', REDCOAT_MAP);
+export const SPR_REDCOAT_C = recolor(SPR_SOLDIER_C, 'red_c', REDCOAT_MAP);
+export const SPR_REDCOAT_D = recolor(SPR_SOLDIER_D, 'red_d', REDCOAT_MAP);
+export const SPR_REDCOAT_FIRE = recolor(SPR_SOLDIER_FIRE, 'red_f', REDCOAT_MAP);
 
-/** Recruited allies that join mid-run wear white/ice colours. */
-export const SPR_ALLY_A = recolor(SPR_SOLDIER_A, 'ally_a', {
-  2: '#39506e',
-  3: '#8fb6d8',
-  5: '#c9d8e8',
-  6: '#9fb6cc',
-  7: '#eef6ff',
-  9: '#3d4a5c',
-});
-export const SPR_ALLY_B = recolor(SPR_SOLDIER_B, 'ally_b', {
-  2: '#39506e',
-  3: '#8fb6d8',
-  5: '#c9d8e8',
-  6: '#9fb6cc',
-  7: '#eef6ff',
-  9: '#3d4a5c',
-});
-export const SPR_ALLY_FIRE = recolor(SPR_SOLDIER_FIRE, 'ally_f', {
-  2: '#39506e',
-  3: '#8fb6d8',
-  5: '#c9d8e8',
-  6: '#9fb6cc',
-  7: '#eef6ff',
-  9: '#3d4a5c',
-});
+/** Recruits picked up mid-run wear pale winter kit so they read as new. */
+const ALLY_MAP = {
+  2: '#2f4763', 3: '#6f9ec4',
+  8: '#eef6ff', 9: '#c3d6e8', 10: '#8ba4bd',
+  11: '#63d8ff', 13: '#4a5567',
+  16: '#8ba4bd', 17: '#6d8398',
+};
+export const SPR_ALLY_A = recolor(SPR_SOLDIER_A, 'ally_a', ALLY_MAP);
+export const SPR_ALLY_B = recolor(SPR_SOLDIER_B, 'ally_b', ALLY_MAP);
+export const SPR_ALLY_C = recolor(SPR_SOLDIER_C, 'ally_c', ALLY_MAP);
+export const SPR_ALLY_D = recolor(SPR_SOLDIER_D, 'ally_d', ALLY_MAP);
+export const SPR_ALLY_FIRE = recolor(SPR_SOLDIER_FIRE, 'ally_f', ALLY_MAP);
 
 // ---------------------------------------------------------------------------
 // Enemies — seen from the front
@@ -719,10 +732,13 @@ export const SPR_CRYSTAL = defineSprite(
 export const ART_INDEX: Record<string, SpriteDef> = {
   SPR_SOLDIER_A,
   SPR_SOLDIER_B,
+  SPR_SOLDIER_C,
+  SPR_SOLDIER_D,
   SPR_SOLDIER_FIRE,
   SPR_REDCOAT_A,
-  SPR_REDCOAT_B,
+  SPR_REDCOAT_C,
   SPR_ALLY_A,
+  SPR_ALLY_C,
   SPR_GRUNT_A,
   SPR_GRUNT_B,
   SPR_SHIELDER,

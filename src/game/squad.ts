@@ -6,15 +6,15 @@
  * the whole blob slosh when you steer — the signature feel of the genre.
  */
 
-import { clamp, damp, TAU } from '../core/math';
+import { clamp, damp } from '../core/math';
 import { fx as rnd } from '../core/rng';
 import { ROAD_HALF, type Camera, type Projected } from '../render/camera';
 import type { Painter } from '../render/pixelbuffer';
 import type { SpriteDef } from '../render/sprite';
 import {
-  SPR_ALLY_A, SPR_ALLY_B, SPR_ALLY_FIRE,
-  SPR_REDCOAT_A, SPR_REDCOAT_B, SPR_REDCOAT_FIRE,
-  SPR_SOLDIER_A, SPR_SOLDIER_B, SPR_SOLDIER_FIRE,
+  SPR_ALLY_A, SPR_ALLY_B, SPR_ALLY_C, SPR_ALLY_D, SPR_ALLY_FIRE,
+  SPR_REDCOAT_A, SPR_REDCOAT_B, SPR_REDCOAT_C, SPR_REDCOAT_D, SPR_REDCOAT_FIRE,
+  SPR_SOLDIER_A, SPR_SOLDIER_B, SPR_SOLDIER_C, SPR_SOLDIER_D, SPR_SOLDIER_FIRE,
 } from '../render/art';
 import { withAlpha } from '../render/palette';
 
@@ -29,14 +29,32 @@ const SLOT = 0.30;
 const PACK = 0.42;
 /** Hard cap on the formation radius so the crowd never spills off the road. */
 const MAX_RADIUS = 2.7;
+/** How far the column may push ahead of, or lag behind, its rail. */
+const PUSH_RANGE = 3.6;
 const GOLDEN = 2.39996323;
 
 export type UnitSkin = 'blue' | 'red' | 'ally';
 
-const SKINS: Record<UnitSkin, { walk: [SpriteDef, SpriteDef]; fire: SpriteDef; ring: string }> = {
-  blue: { walk: [SPR_SOLDIER_A, SPR_SOLDIER_B], fire: SPR_SOLDIER_FIRE, ring: '#63d8ff' },
-  red: { walk: [SPR_REDCOAT_A, SPR_REDCOAT_B], fire: SPR_REDCOAT_FIRE, ring: '#5cff8f' },
-  ally: { walk: [SPR_ALLY_A, SPR_ALLY_B], fire: SPR_ALLY_FIRE, ring: '#b9ffec' },
+interface Skin {
+  walk: [SpriteDef, SpriteDef, SpriteDef, SpriteDef];
+  fire: SpriteDef;
+  ring: string;
+  dust: string;
+}
+
+const SKINS: Record<UnitSkin, Skin> = {
+  blue: {
+    walk: [SPR_SOLDIER_A, SPR_SOLDIER_B, SPR_SOLDIER_C, SPR_SOLDIER_D],
+    fire: SPR_SOLDIER_FIRE, ring: '#8cff9a', dust: '#cdbb96',
+  },
+  red: {
+    walk: [SPR_REDCOAT_A, SPR_REDCOAT_B, SPR_REDCOAT_C, SPR_REDCOAT_D],
+    fire: SPR_REDCOAT_FIRE, ring: '#ffd06a', dust: '#d9c39c',
+  },
+  ally: {
+    walk: [SPR_ALLY_A, SPR_ALLY_B, SPR_ALLY_C, SPR_ALLY_D],
+    fire: SPR_ALLY_FIRE, ring: '#b9ffec', dust: '#dfeaf2',
+  },
 };
 
 interface Unit {
@@ -50,6 +68,8 @@ interface Unit {
   vy: number;
   gait: number;
   fireGlow: number;
+  /** Shoulder recoil, decays after each volley. */
+  recoil: number;
   spawn: number;
   skin: UnitSkin;
 }
@@ -66,7 +86,12 @@ export class Squad {
   count = 0;
 
   x = 0;
+  /** World depth of the column: the rail plus whatever the player has pushed. */
   z = 0;
+  /** The auto-advancing rail the level scrolls along. */
+  railZ = 0;
+  /** Player push in [-1, 1]; +1 is a forward march, -1 is holding back. */
+  push = 0;
   /** Forward speed in world units per second. */
   speed = 12;
   baseSpeed = 12;
@@ -86,12 +111,15 @@ export class Squad {
   private gaitClock = 0;
   private formScale = 1;
   private slotBuf = { ox: 0, oz: 0 };
+  /** Whole-column march cadence; whole numbers are footfalls. */
+  private marchPhase = 0;
+  private footfallPending = false;
 
   constructor() {
     for (let i = 0; i < MAX_UNITS; i++) {
       this.units.push({
         active: false, slot: i, x: 0, z: 0, y: 0, vy: 0,
-        gait: 0, fireGlow: 0, spawn: 0, skin: 'blue',
+        gait: 0, fireGlow: 0, recoil: 0, spawn: 0, skin: 'blue',
       });
     }
   }
@@ -100,6 +128,8 @@ export class Squad {
     this.skin = skin;
     this.x = 0;
     this.z = z;
+    this.railZ = z;
+    this.push = 0;
     this.vx = 0;
     this.lean = 0;
     this.shieldTime = 0;
@@ -172,8 +202,10 @@ export class Squad {
         u.vy = 0;
         u.spawn = 1;
       }
-      u.gait = rnd.next() * TAU;
+      // Small per-unit offset only: an army marches in step.
+      u.gait = rnd.sym(0.35);
       u.fireGlow = 0;
+      u.recoil = 0;
     }
     this.orderDirty = true;
     return added;
@@ -222,6 +254,24 @@ export class Squad {
     return this.count / this.shooterCount;
   }
 
+  /**
+   * Fire-rate multiplier from the push. Marching up gains cadence and costs
+   * safety; hanging back trades a little cadence for room to breathe.
+   */
+  get fireRateMul(): number {
+    return this.push >= 0 ? 1 + this.push * 0.5 : 1 + this.push * 0.3;
+  }
+
+  /** Contact band multiplier — pushing forward exposes the front rank. */
+  get exposure(): number {
+    return 1 + this.push * 0.28;
+  }
+
+  /** How far the column currently sits ahead of its rail, in world units. */
+  get pushOffset(): number {
+    return this.push * PUSH_RANGE;
+  }
+
   /** Fills `out` with muzzle points for the frontmost units. */
   muzzles(out: MuzzlePoint[]): number {
     const n = Math.min(this.shooterCount, this.count, out.length);
@@ -231,18 +281,21 @@ export class Squad {
       out[i].y = u.y + 0.78;
       out[i].z = u.z + 0.18;
       u.fireGlow = 1;
+      u.recoil = 1;
     }
     return n;
   }
 
-  update(dt: number, steer: number, roadHalf = ROAD_HALF): void {
+  update(dt: number, steer: number, push = 0, roadHalf = ROAD_HALF): void {
     const dashing = this.dashTime > 0;
     if (dashing) this.dashTime = Math.max(0, this.dashTime - dt);
     if (this.shieldTime > 0) this.shieldTime = Math.max(0, this.shieldTime - dt);
     this.hurtFlash = Math.max(0, this.hurtFlash - dt * 3.2);
 
     this.speed = damp(this.speed, this.baseSpeed * (dashing ? 1.85 : 1), 3.4, dt);
-    this.z += this.speed * dt;
+    this.railZ += this.speed * dt;
+    this.push = damp(this.push, clamp(push, -1, 1), 6, dt);
+    this.z = this.railZ + this.push * PUSH_RANGE;
 
     const limit = Math.max(0.4, roadHalf - this.radius * 0.55);
     const targetX = clamp(steer * roadHalf * 1.06, -limit, limit);
@@ -251,6 +304,12 @@ export class Squad {
     this.vx = dt > 0 ? (this.x - prevX) / dt : 0;
     this.lean = damp(this.lean, clamp(this.vx / 9, -1, 1), 8, dt);
 
+    // Cadence rises with the march, so charging forward visibly quickens the
+    // step as well as the rate of fire.
+    const cadence = 2.1 + this.speed * 0.055 + Math.max(0, this.push) * 0.9;
+    const prevPhase = this.marchPhase;
+    this.marchPhase += dt * cadence;
+    if (Math.floor(this.marchPhase) !== Math.floor(prevPhase)) this.footfallPending = true;
     this.gaitClock += dt * (7.5 + this.speed * 0.22);
 
     if (this.orderDirty) this.rebuildOrder();
@@ -273,9 +332,31 @@ export class Squad {
         }
       }
       if (u.spawn < 1) u.spawn = Math.min(1, u.spawn + dt * 3.6);
-      u.gait += dt * (7.5 + this.speed * 0.22);
       if (u.fireGlow > 0) u.fireGlow = Math.max(0, u.fireGlow - dt * 9);
+      if (u.recoil > 0) u.recoil = Math.max(0, u.recoil - dt * 7);
     }
+  }
+
+  /** True once per footfall of the column. Consumes the flag. */
+  takeFootfall(): boolean {
+    if (!this.footfallPending) return false;
+    this.footfallPending = false;
+    return true;
+  }
+
+  /** Ground position of a random unit — used to place dust and sparkles. */
+  sampleUnit(out: { x: number; y: number; z: number }): boolean {
+    if (this.count <= 0) return false;
+    const u = this.units[Math.floor(rnd.next() * this.count) % this.count];
+    out.x = u.x;
+    out.y = u.y;
+    out.z = u.z;
+    return true;
+  }
+
+  /** Colour the column kicks up, for dust and footfall marks. */
+  get dustColor(): string {
+    return SKINS[this.skin].dust;
   }
 
   private rebuildOrder(): void {
@@ -325,9 +406,14 @@ export class Squad {
       if (h < 1.5) continue;
 
       const firing = u.fireGlow > 0.25;
-      const def = firing ? skin.fire : skin.walk[(Math.floor(u.gait / Math.PI) & 1) as 0 | 1];
+      const frame = (Math.floor((this.marchPhase + u.gait) * 2) & 3) as 0 | 1 | 2 | 3;
+      const def = firing ? skin.fire : skin.walk[frame];
       const tint = hurt && this.hurtFlash > 0.5 ? '#ffd6d6' : undefined;
-      p.sprite(def, proj.sx, proj.sy, h, {
+      // Recoil shoves the shoulders back down the road for a beat, and the
+      // whole column rides one shared bob so the march reads as in step.
+      const kick = u.recoil * s * 0.05;
+      const bob = Math.abs(Math.sin((this.marchPhase + u.gait) * Math.PI)) * s * 0.028;
+      p.sprite(def, proj.sx - kick * 0.25, proj.sy + kick - bob, h, {
         tint,
         variant: tint ? 'hurt' : '',
         squashX: 1 + this.lean * 0.1,

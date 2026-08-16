@@ -59,12 +59,12 @@ function frame(now: number): void {
     while (left > 0) {
       const step = Math.min(1 / 60, left);
       left -= step;
-      input.update(step, stage.cssWidth);
+      input.update(step, stage.cssWidth, stage.cssHeight);
       game!.update(step, input);
     }
   }
 
-  input.update(dt, stage.cssWidth);
+  input.update(dt, stage.cssWidth, stage.cssHeight);
   game!.update(dt, input);
   audio.update(dt);
 
@@ -96,6 +96,7 @@ declare global {
       ready: boolean;
       startRun(levelIndex?: number): void;
       setSteer(x: number): void;
+      setPush(y: number): void;
       state(): Record<string, unknown>;
       seed(n: number): void;
       fastForward(seconds: number): void;
@@ -112,6 +113,9 @@ window.__FH = {
   },
   setSteer(x: number) {
     input.scriptedSteer = Number.isFinite(x) ? Math.max(-1, Math.min(1, x)) : null;
+  },
+  setPush(y: number) {
+    input.scriptedPush = Number.isFinite(y) ? Math.max(-1, Math.min(1, y)) : null;
   },
   state() {
     return game!.snapshot();
