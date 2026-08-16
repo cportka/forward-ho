@@ -1,0 +1,19 @@
+{
+  "name": "forward-ho",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Forward Ho! — a pixel-art forward-scrolling crowd-runner shoot-em-up.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173",
+    "typecheck": "tsc --noEmit",
+    "shots": "node tools/screenshot.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1",
+    "typescript": "^5.9.2",
+    "vite": "^7.0.2"
+  }
+}
