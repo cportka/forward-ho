@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0a0e17" />
+    <meta name="description" content="Forward Ho! — a pixel-art forward-scrolling crowd-runner shoot-em-up." />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <title>Forward Ho!</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230b0d14'/%3E%3Crect x='3' y='2' width='2' height='12' fill='%23ffd447'/%3E%3Crect x='5' y='3' width='7' height='5' fill='%23e0332f'/%3E%3Crect x='6' y='10' width='6' height='2' fill='%232f6ddb'/%3E%3C/svg%3E"
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #05070d;
+        touch-action: none;
+        overscroll-behavior: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #stage {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: #05070d;
+      }
+      #game {
+        display: block;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+        touch-action: none;
+        cursor: crosshair;
+      }
+      #boot {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: #05070d;
+        color: #ffd447;
+        font: 700 14px/1.6 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        z-index: 10;
+        transition: opacity 0.35s ease;
+      }
+      #boot.gone {
+        opacity: 0;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage"><canvas id="game"></canvas></div>
+    <div id="boot">Forward Ho! — loading</div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
