@@ -7,9 +7,10 @@ import { beginUi, endUi, makeUiContext, type UiContext } from '../ui/ui';
 import { drawHud } from '../ui/hud';
 import {
   drawBarracks, drawHelp, drawLevels, drawPause, drawResults, drawTitle,
-  type ResultsData, type ScreenAction,
+  type DeployContext, type ResultsData, type ScreenAction,
 } from '../ui/screens';
 import { audio } from './audio';
+import { sfxBankStatus } from './sfxbank';
 import { Meta } from './progression';
 import { World } from './world';
 import { CAMPAIGN_LENGTH } from './levels';
@@ -33,6 +34,10 @@ export class Game {
   private pendingState: GameState | null = null;
   /** Last UI action applied — surfaced in the debug snapshot. */
   private lastAction = 'none';
+  /** Set while the barracks is acting as the between-levels staging screen. */
+  private deploy: DeployContext | null = null;
+  /** Counts down on the results screen, then hands over to the barracks. */
+  private resultsDwell = 0;
 
   constructor(private readonly stage: PixelStage) {
     this.ui = makeUiContext(stage.layers.ui, stage.width, stage.height);
@@ -63,6 +68,7 @@ export class Game {
   }
 
   startRun(levelIndex: number): void {
+    this.deploy = null;
     this.levelIndex = clamp(levelIndex, 0, 98);
     this.world.resize(this.stage.width, this.stage.height);
     this.world.start(this.levelIndex, this.seed, this.meta);
@@ -74,6 +80,10 @@ export class Game {
   }
 
   private goto(next: GameState): void {
+    // Idempotent: a repeated request for the same screen must not restart the
+    // wipe, or a per-frame trigger (like the results auto-advance) pins the
+    // transition at zero and the screen never actually changes.
+    if (this.pendingState === next) return;
     this.pendingState = next;
     this.transition = 0;
   }
@@ -91,6 +101,7 @@ export class Game {
         break;
       case 'back':
         audio.sfx('uiBack');
+        this.deploy = null;
         this.goto('title');
         break;
       case 'buy':
@@ -113,6 +124,7 @@ export class Game {
         break;
       case 'quit':
         audio.sfx('uiBack');
+        this.deploy = null;
         this.goto('title');
         audio.setMusic('menu');
         break;
@@ -144,7 +156,7 @@ export class Game {
       // Attract world: gentle scripted steering, restarted whenever it ends.
       this.attractTimer += dt;
       const steer = Math.sin(this.attractTimer * 0.55) * 0.85 + Math.sin(this.attractTimer * 1.7) * 0.18;
-      this.attract.update(dt, clamp(steer, -1, 1));
+      this.attract.update(dt, clamp(steer, -1, 1), Math.sin(this.attractTimer * 0.37) * 0.55);
       if (this.attract.phase !== 'running' && this.attract.readyToScore) {
         this.seed = (this.seed * 1664525 + 1013904223) >>> 0;
         this.startAttract();
@@ -156,7 +168,7 @@ export class Game {
         this.state = 'paused';
         audio.sfx('uiBack');
       }
-      this.world.update(dt, input.steer);
+      this.world.update(dt, input.steer, input.push);
       if (this.world.phase !== 'running' && this.world.readyToScore) this.finishRun();
     } else if (this.state === 'paused') {
       if (input.pressed('Escape', 'p')) {
@@ -166,6 +178,15 @@ export class Game {
     } else if (this.state === 'results') {
       this.revealT = Math.min(1, this.revealT + dt * 0.9);
       if (this.results) this.results.reveal = this.revealT;
+      // Once the tally has finished counting, the barracks comes up on its own
+      // so every level ends with a chance to spend what you just earned.
+      if (this.revealT >= 1) {
+        this.resultsDwell -= dt;
+        if (this.resultsDwell <= 0) {
+          audio.sfx('uiClick');
+          this.goto('barracks');
+        }
+      }
     }
   }
 
@@ -192,6 +213,13 @@ export class Game {
       hasNext: true,
     };
     this.revealT = 0;
+    this.resultsDwell = 2.2;
+    this.deploy = {
+      cleared,
+      levelName: w.plan.name,
+      goldEarned,
+      hasNext: true,
+    };
     this.state = 'results';
     audio.setMusic(cleared ? 'victory' : 'menu');
   }
@@ -224,7 +252,7 @@ export class Game {
         action = drawLevels(this.ui, this.meta);
         break;
       case 'barracks':
-        action = drawBarracks(this.ui, this.meta);
+        action = drawBarracks(this.ui, this.meta, this.deploy);
         break;
       case 'help':
         action = drawHelp(this.ui);
@@ -259,9 +287,11 @@ export class Game {
 
   snapshot(): Record<string, unknown> {
     const w = this.state === 'playing' || this.state === 'paused' || this.state === 'results' ? this.world : this.attract;
+    const bank = sfxBankStatus();
     return {
       state: this.state,
       lastAction: this.lastAction,
+      sfxBank: `${bank.loaded}/${bank.total}${bank.failed ? ' FAILED' : ''}`,
       gold: this.meta.state.gold,
       highestLevel: this.meta.state.highestLevel,
       ...w.snapshot(),

@@ -27,6 +27,7 @@
  */
 
 import { clamp, lerp } from '../core/math';
+import { primeSfxBank, sfxBuffer } from './sfxbank';
 import { fx } from '../core/rng';
 
 export type SfxName =
@@ -37,7 +38,8 @@ export type SfxName =
   | 'recruit' | 'weaponUp' | 'shield' | 'coin'
   | 'bossRoar' | 'bossHit' | 'bossDie' | 'stomp'
   | 'explosion' | 'uiClick' | 'uiBack' | 'countUp'
-  | 'lose' | 'win' | 'levelStart' | 'warning';
+  | 'lose' | 'win' | 'levelStart' | 'warning'
+  | 'march' | 'shell';
 
 export type MusicTrack = 'none' | 'menu' | 'run' | 'boss' | 'victory';
 
@@ -98,6 +100,8 @@ const MIN_GAP: Partial<Record<SfxName, number>> = {
   lose: 1.0,
   levelStart: 0.5,
   warning: 0.4,
+  march: 1 / 7,
+  shell: 1 / 12,
 };
 
 /** Per-sfx random pitch jitter (fraction of playback rate). */
@@ -118,6 +122,8 @@ const JITTER: Partial<Record<SfxName, number>> = {
   countUp: 0.04,
   uiClick: 0.01,
   uiBack: 0.01,
+  march: 0.12,
+  shell: 0.14,
 };
 
 /** Nominal length of each sfx at rate 1. Also drives the voice lifetime. */
@@ -153,6 +159,8 @@ const SFX_DUR: Record<SfxName, number> = {
   win: 1.2,
   levelStart: 0.75,
   warning: 0.75,
+  march: 0.16,
+  shell: 0.1,
 };
 
 // ---------------------------------------------------------------------------
@@ -280,6 +288,9 @@ function init(): void {
   slotB = b;
   noiseBuf = buildNoise(c);
   readyFlag = true;
+
+  // Bake the 8bit-sfx effects in the background; synthesis covers the gap.
+  primeSfxBank(c);
 
   if (curTrack !== 'none') startTrack(curTrack, true);
 }
@@ -505,6 +516,25 @@ function addLfo(
 function renderSfx(name: SfxName, t0: number, vol: number, rate: number, pan: number): void {
   const bus = sfxBus;
   if (!bus) return;
+
+  // Prefer the baked 8bit-sfx sample; fall back to synthesis while the bank is
+  // still rendering, or if the package could not be loaded at all.
+  const c0 = ctx;
+  const buf = sfxBuffer(name);
+  if (buf && c0) {
+    const bd = buf.duration / rate;
+    const bv = allocVoice(true, t0, bd, vol, pan, bus);
+    if (!bv) return;
+    const src = c0.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = rate;
+    src.connect(bv.out);
+    src.start(t0);
+    src.stop(t0 + bd + 0.02);
+    bv.srcs.push(src);
+    return;
+  }
+
   const d = SFX_DUR[name] / rate;
   const v = allocVoice(true, t0, d, vol, pan, bus);
   if (!v) return;

@@ -765,6 +765,9 @@ export async function main() {
     const beginRun = async () => {
       if (runStarted || !driving) return;
       runStarted = true;
+      // A real click first: audio (and therefore the 8bit-sfx bank) is gated on
+      // a user gesture, so without this the smoke test never exercises it.
+      await page.mouse.click(opts.width / 2, opts.height - 30).catch(() => {});
       const { started, steering } = await startRunAndSteer(page, { levelIndex: 0 });
       console.log(
         `[script] startRun(0) ${started ? 'ok' : 'unavailable'}; steering ${steering ? 'on' : 'unavailable'}`,

@@ -107,12 +107,22 @@ export class Camera {
     this.shakeTime = Math.max(this.shakeTime, 0.16 + mag * 0.006);
   }
 
-  follow(x: number, z: number, dt: number, lateralRate = 7): void {
+  /**
+   * `railZ` is the auto-advancing rail; `pushOffset` is how far the player has
+   * driven the column ahead of (or behind) it. The camera only takes part of
+   * the push, so marching forward visibly walks the squad up the screen and
+   * hanging back brings it toward the viewer.
+   */
+  follow(x: number, railZ: number, dt: number, pushOffset = 0, lateralRate = 7): void {
     this.targetX = x * 0.62;
     this.x = damp(this.x, this.targetX, lateralRate, dt);
     this.dolly = damp(this.dolly, this.dollyTarget, 2.4, dt);
     this.lift = damp(this.lift, this.liftTarget, 2.4, dt);
-    this.z = z - PLAYER_DZ - this.dolly;
+    // Asymmetric on purpose: charging forward walks the column up the screen
+    // (the camera keeps less of the push), while holding back barely enlarges
+    // it, so the crowd never crawls off the bottom edge.
+    const share = pushOffset > 0 ? 0.45 : 0.78;
+    this.z = railZ + pushOffset * share - PLAYER_DZ - this.dolly;
   }
 
   update(dt: number): void {

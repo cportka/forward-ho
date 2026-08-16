@@ -8,7 +8,7 @@ import { fx as rnd } from '../core/rng';
 import { Camera, NEAR_Z, ROAD_HALF, scratchProjection } from '../render/camera';
 import type { PixelStage } from '../render/pixelbuffer';
 import { drawSky, drawFar, drawGround, drawRoad, drawTrackside } from '../render/backdrop';
-import { BIOMES, MAX_WEAPON_TIER, WEAPONS, type BiomeDef, type WeaponDef } from './defs';
+import { BIOMES, GATE_STYLES, MAX_WEAPON_TIER, WEAPONS, type BiomeDef, type WeaponDef } from './defs';
 import { Boss, BOSSES } from './boss';
 import { Bullets } from './bullets';
 import { EnemyManager, type Enemy } from './enemies';
@@ -90,6 +90,7 @@ export class World {
   private hazards: PendingHazard[] = [];
   private meta!: Meta;
   private endDelay = 0;
+  private sampleBuf = { x: 0, y: 0, z: 0 };
 
   constructor() {
     for (let i = 0; i < 32; i++) this.muzzleBuf.push({ x: 0, y: 0, z: 0 });
@@ -151,16 +152,16 @@ export class World {
   // Simulation
   // -------------------------------------------------------------------------
 
-  update(dt: number, steer: number): void {
+  update(dt: number, steer: number, push = 0): void {
     this.time += dt;
     if (this.phase === 'running') {
       this.stats.time = this.time;
       this.stream();
-      this.squad.update(dt, steer);
+      this.squad.update(dt, steer, push);
       this.updateFiring(dt);
     } else {
       // Let the world settle for a beat before the results screen.
-      this.squad.update(dt, steer * 0.2);
+      this.squad.update(dt, steer * 0.2, 0);
       this.endDelay -= dt;
     }
 
@@ -186,6 +187,13 @@ export class World {
     if (picked > 0) {
       this.stats.gold += picked;
       audio.sfx('coin', { vol: 0.5, rate: 1 + Math.min(0.5, picked * 0.02) });
+      for (let i = 0; i < 4; i++) {
+        this.fx.particle(
+          'spark', this.squad.x + rnd.sym(this.squad.radius), 0.7 + rnd.next() * 0.6, pz,
+          rnd.sym(1.6), 2.4 + rnd.next() * 2, rnd.sym(1.2),
+          0.28, 0.05, '#ffe27a', -9, 1.6, true,
+        );
+      }
     }
 
     if (this.comboTimer > 0) {
@@ -193,8 +201,9 @@ export class World {
       if (this.comboTimer <= 0) this.stats.combo = 0;
     }
 
+    this.emitMarchDust();
     this.fx.update(dt, this.cam.z - 8);
-    this.cam.follow(this.squad.x, pz, dt);
+    this.cam.follow(this.squad.x, this.squad.railZ, dt, this.squad.pushOffset);
     this.cam.update(dt);
 
     this.gates.cull(this.cam.z - 8);
@@ -281,6 +290,26 @@ export class World {
     }
   }
 
+  /**
+   * Boots on the road. The column steps in unison, so each footfall gets a
+   * short puff of dust under a handful of units and one soft footstep cue.
+   */
+  private emitMarchDust(): void {
+    if (this.phase !== 'running' || !this.squad.takeFootfall() || this.squad.count <= 0) return;
+    const puffs = Math.min(5, 1 + Math.floor(this.squad.count / 12));
+    const dust = this.squad.dustColor;
+    for (let i = 0; i < puffs; i++) {
+      if (!this.squad.sampleUnit(this.sampleBuf)) break;
+      const b = this.sampleBuf;
+      this.fx.particle(
+        'smoke', b.x + rnd.sym(0.16), 0.06, b.z - 0.1,
+        rnd.sym(0.5), 0.5 + rnd.next() * 0.5, -1.2 - rnd.next(),
+        0.3 + rnd.next() * 0.2, 0.07 + rnd.next() * 0.06, dust, 0.4, 3.2,
+      );
+    }
+    audio.sfx('march', { vol: clamp(0.1 + this.squad.count * 0.002, 0.1, 0.3), rate: 0.9 + rnd.next() * 0.25 });
+  }
+
   /** Current theoretical damage per second, used to size destructible HP. */
   currentDps(): number {
     const w = this.weapon;
@@ -295,7 +324,7 @@ export class World {
   private updateFiring(dt: number): void {
     if (this.squad.count <= 0) return;
     const w = this.weapon;
-    const interval = w.interval * this.meta.fireRateMul;
+    const interval = (w.interval * this.meta.fireRateMul) / this.squad.fireRateMul;
     this.fireTimer -= dt;
     if (this.fireTimer > 0) return;
     this.fireTimer += Math.max(0.016, interval);
@@ -315,8 +344,17 @@ export class World {
         );
       }
       if (i < 8) this.fx.muzzle(m.x, m.y, m.z, w.glow, 0.8 + w.size * 0.3);
+      // Spent brass arcs out to the right and tinks off the road.
+      if (i < 4) {
+        this.fx.particle(
+          'shard', m.x + 0.2, m.y - 0.05, m.z,
+          2.6 + rnd.next() * 1.8, 1.6 + rnd.next() * 1.4, -1.4 - rnd.next(),
+          0.55 + rnd.next() * 0.3, 0.045, '#ffd447', -14, 0.4,
+        );
+      }
     }
     audio.sfx(w.sfx, { vol: clamp(0.16 + n * 0.012, 0.16, 0.4), rate: 0.94 + rnd.next() * 0.12 });
+    audio.sfx('shell', { vol: 0.1, rate: 1.1 + rnd.next() * 0.3 });
   }
 
   private updateBoss(dt: number): void {
@@ -528,6 +566,15 @@ export class World {
       if (Math.abs(g.x - this.squad.x) > g.halfW + reach) continue;
       g.taken = true;
       g.flash = 1;
+      // A little burst right where the rank touched the plate.
+      const cx = clamp(this.squad.x, g.x - g.halfW, g.x + g.halfW);
+      for (let i = 0; i < 7; i++) {
+        this.fx.particle(
+          'spark', cx + rnd.sym(g.halfW * 0.8), 0.3 + rnd.next() * 1.1, g.z,
+          rnd.sym(2.4), 2 + rnd.next() * 3, rnd.sym(1.6),
+          0.3 + rnd.next() * 0.25, 0.06, GATE_STYLES[g.op].bodyLight, -8, 1.4, true,
+        );
+      }
       this.applyGate(g.op, g.value, g.x, g.z);
       this.stats.gatesTaken++;
     }
@@ -628,8 +675,9 @@ export class World {
 
   private collideEnemies(): void {
     if (this.squad.count <= 0) return;
-    const r = this.squad.radius + 0.35;
-    const zBand = this.squad.radius + 0.5;
+    const exposure = this.squad.exposure;
+    const r = (this.squad.radius + 0.35) * exposure;
+    const zBand = (this.squad.radius + 0.5) * exposure;
     for (const e of this.enemies.list) {
       if (!e.alive || e.dying > 0) continue;
       if (Math.abs(e.z - this.squad.z) > zBand) continue;
@@ -868,6 +916,8 @@ export class World {
       progress: Math.round(this.progress * 1000) / 1000,
       weapon: this.weapon.name,
       weaponTier: this.weaponTier,
+      push: Math.round(this.squad.push * 100) / 100,
+      fireRateMul: Math.round(this.squad.fireRateMul * 100) / 100,
       kills: this.stats.kills,
       gold: this.stats.gold,
       score: this.stats.score,

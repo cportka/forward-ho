@@ -38,11 +38,13 @@ export function makeUiContext(p: Painter, w: number, h: number): UiContext {
 }
 
 function layoutUnit(h: number): number {
-  return clamp(Math.round(h / 300), 2, 14);
+  return clamp(Math.round(h / 290), 2, 14);
 }
 
 function textUnit(h: number): number {
-  return clamp(Math.round(h / 400), 1, 10);
+  // Body text lands at ~2.3% of screen height. Anything smaller than this and
+  // the 5x7 font stops being comfortably readable on a phone.
+  return clamp(Math.round(h / 300), 2, 14);
 }
 
 /** Text size in device pixels per font pixel, `k` multiples of body size. */
@@ -55,6 +57,26 @@ export function fitText(text: string, maxWidth: number, bold = true, cap = 64): 
   const unitW = measureText(text, 1, { bold });
   if (unitW <= 0) return 1;
   return clamp(Math.floor(maxWidth / unitW), 1, cap);
+}
+
+/**
+ * One size for a whole group of labels, driven by the longest of them. Mixed
+ * shrink levels inside a single list are the main thing that makes pixel text
+ * look sloppy, so blocks of copy get sized together.
+ */
+export function fitTextGroup(texts: readonly string[], maxWidth: number, nominal: number, floor = 0.6): number {
+  let size = nominal;
+  for (const t of texts) size = Math.min(size, fitText(t, maxWidth));
+  return Math.max(Math.round(nominal * floor), Math.min(nominal, size));
+}
+
+/**
+ * Text size for a label that must fit a box but must also stay readable.
+ * Shrinks to fit, but never below `floor` of the nominal size — if a label
+ * cannot fit at that size it needs to be shorter, not smaller.
+ */
+export function fitTextClamped(text: string, maxWidth: number, nominal: number, floor = 0.7): number {
+  return Math.max(Math.round(nominal * floor), Math.min(nominal, fitText(text, maxWidth)));
 }
 
 export function beginUi(
@@ -154,9 +176,10 @@ export function button(
   p.rect(x, y + press, w, b, '#ffffff', disabled ? 0.06 : 0.22);
   p.rect(x, y + h - b + press, w, b, '#000000', 0.28);
 
-  // Text height lands at ~42% of the button, then shrinks further if it would
-  // overflow the width.
-  const size = style.size ?? Math.max(1, Math.min(Math.round(h * 0.06), fitText(label, w - b * 8)));
+  // Text height lands at ~50% of the button, shrinking to fit the width but
+  // never below three-quarters of that — short labels beat tiny ones.
+  const nominal = Math.max(2, Math.round(h * 0.072));
+  const size = style.size ?? fitTextClamped(label, w - b * 7, nominal, 0.75);
   const tcol = disabled ? '#6a7284' : (active ? (style.textHot ?? '#ffffff') : (style.text ?? '#ffffff'));
   let tx = x + w / 2;
   let align: TextOptions['align'] = 'center';
@@ -170,10 +193,13 @@ export function button(
     if (align === 'center') tx += ih * 0.35;
     else tx = x + b * 3 + ih + b * 2;
   }
+  // Buttons always have a solid fill behind them, so a full outline only
+  // fattens the glyphs. A one-pixel drop shadow gives the same separation.
   drawText(p, label, tx, y + press + h / 2 - size * 3.5, size, {
     color: tcol,
-    outline: 1,
-    outlineColor: '#0b0d14',
+    outline: 0,
+    shadow: 1,
+    shadowColor: 'rgba(0,0,0,0.55)',
     align,
     bold: true,
   });

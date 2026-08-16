@@ -15,5 +15,8 @@
     "playwright": "^1.62.1",
     "typescript": "^5.9.2",
     "vite": "^7.0.2"
+  },
+  "dependencies": {
+    "8bit-sfx": "^1.0.0"
   }
 }

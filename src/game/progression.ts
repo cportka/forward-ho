@@ -23,32 +23,32 @@ export const UPGRADES: readonly UpgradeDef[] = [
   {
     id: 'troops', name: 'RECRUITS', blurb: 'START WITH MORE TROOPS',
     icon: ICON_SOLDIER, maxLevel: 12, baseCost: 60, growth: 1.42,
-    format: (l) => `${9 + l * 2} TROOPS`,
+    format: (l) => `${9 + l * 2} START`,
   },
   {
     id: 'firerate', name: 'DRILL', blurb: 'FASTER RATE OF FIRE',
     icon: ICON_RIFLE, maxLevel: 10, baseCost: 90, growth: 1.5,
-    format: (l) => `+${Math.round(l * 4)}% FIRE RATE`,
+    format: (l) => `+${Math.round(l * 4)}% ROF`,
   },
   {
     id: 'damage', name: 'POWDER', blurb: 'HEAVIER SHOT',
     icon: ICON_BOLT, maxLevel: 10, baseCost: 110, growth: 1.52,
-    format: (l) => `+${Math.round(l * 9)}% DAMAGE`,
+    format: (l) => `+${Math.round(l * 9)}% DMG`,
   },
   {
-    id: 'magnet', name: 'QUARTERMASTER', blurb: 'PULL GOLD FROM FURTHER',
+    id: 'magnet', name: 'SUPPLY', blurb: 'PULL GOLD FROM FURTHER',
     icon: ICON_MAGNET, maxLevel: 6, baseCost: 70, growth: 1.45,
-    format: (l) => `+${(l * 0.9).toFixed(1)} RANGE`,
+    format: (l) => `+${(l * 0.9).toFixed(1)} PULL`,
   },
   {
-    id: 'revive', name: 'LAST STAND', blurb: 'RALLY ONCE PER RUN',
+    id: 'revive', name: 'RALLY', blurb: 'REGROUP ONCE PER RUN',
     icon: ICON_HEART, maxLevel: 3, baseCost: 240, growth: 2.1,
-    format: (l) => (l === 0 ? 'NONE' : `${l} RALLY`),
+    format: (l) => `${l} SAVES`,
   },
   {
-    id: 'speed', name: 'FORCED MARCH', blurb: 'ADVANCE FASTER',
+    id: 'speed', name: 'MARCH', blurb: 'ADVANCE FASTER',
     icon: ICON_COIN, maxLevel: 6, baseCost: 80, growth: 1.48,
-    format: (l) => `+${Math.round(l * 5)}% SPEED`,
+    format: (l) => `+${Math.round(l * 5)}% PACE`,
   },
 ] as const;
 
